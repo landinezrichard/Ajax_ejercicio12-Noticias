@@ -1,0 +1,251 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Ejercicio 12 - Actualizacion periodica de contenidos</title>
+<style type="text/css">
+body { margin: 0; }
+#contenidos { padding: 1em; }
+#ticker {
+  height: 20px;
+  padding: .3em;
+  border-bottom: 1px solid #CCC;
+  background: #FAFAFA;
+  font-family: Arial, Helvetica, sans-serif;
+}
+#ticker strong { margin-right: 1em; }
+#acciones {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+</style>
+<script type="text/javascript">
+	//La variable intervalo se usa para detener las peticiones al servidor.
+	var intervalo = null;
+	//El array catalogo_noticias, se usa para guardar en el lado del cliente, las noticias que envia el servidor. Se usa para añadir funcionalidad de anterior y siguiente
+	var catalogo_noticias = [];
+	//indice_noticia, sirve para posicionarnos en el array catalogo_noticias
+	var indice_noticia=null;
+	//net es el objeto que nos permite conectarnos al servidor
+	var net = new Object();
+	 
+	net.READY_STATE_UNINITIALIZED=0;
+	net.READY_STATE_LOADING=1;
+	net.READY_STATE_LOADED=2;
+	net.READY_STATE_INTERACTIVE=3;
+	net.READY_STATE_COMPLETE=4;
+	 
+	// Constructor
+	net.CargadorContenidos = function(url, funcion, funcionError) {
+	  this.url = url;
+	  this.req = null;
+	  this.onload = funcion;
+	  this.onerror = (funcionError) ? funcionError : this.defaultError;
+	  this.cargaContenidoXML(url);
+	}
+	 
+	net.CargadorContenidos.prototype = {
+	  cargaContenidoXML: function(url) {
+		if(window.XMLHttpRequest) {
+		  this.req = new XMLHttpRequest();
+		}
+		else if(window.ActiveXObject) {
+		  this.req = new ActiveXObject("Microsoft.XMLHTTP");
+		}
+	 
+		if(this.req) {
+		  try {
+			var loader = this;
+			this.req.onreadystatechange = function() {
+			  loader.onReadyState.call(loader);
+			}
+			this.req.open('GET', url, true);
+			this.req.send(null);
+		  } catch(err) {
+			this.onerror.call(this);
+		  }
+		}
+	  },
+	 
+	  onReadyState: function() {
+		var req = this.req;
+		var ready = req.readyState;
+		if(ready == net.READY_STATE_COMPLETE) {
+		  var httpStatus = req.status;
+		  if(httpStatus == 200 || httpStatus == 0) {
+			this.onload.call(this);
+		  }
+		  else {
+			this.onerror.call(this);
+		  }
+		}
+	  },
+	 
+	  defaultError: function() {
+		alert("Se ha producido un error al obtener los datos"
+		  + "\n\nreadyState:" + this.req.readyState
+		  + "\nstatus: " + this.req.status 
+		  + "\nheaders: " + this.req.getAllResponseHeaders());
+	  }
+	}
+	
+	function obtenerElementoId(identificador){
+		//obtiene un elemento por id
+		return document.getElementById(identificador);
+	}
+	
+	function mostrarHora(){
+		var fechaHora=new Date();
+		var horas=fechaHora.getHours();
+		var minutos=fechaHora.getMinutes();
+		var segundos=fechaHora.getSeconds();
+			 
+		var sufijo="am";
+		
+		if(horas>12){
+			horas=horas-12;
+			sufijo="pm";
+		}
+				
+		if(horas<10){
+			horas="0"+horas;
+		}
+		if(minutos<10){
+			minutos="0"+minutos;
+		}
+		if(segundos<10){
+			segundos="0"+segundos;
+		}		
+		
+		return horas+":"+minutos+":"+segundos+sufijo;		
+	}
+	
+	function muestraContenido(info) {
+		//obtiene el lugar donde se actualizan las noticias
+		var zonaNoticia=obtenerElementoId("ticker");
+		
+		// Borrar datos anteriores
+		zonaNoticia.innerHTML = "";
+		
+		//agrega la info a mostrar
+		zonaNoticia.innerHTML=info;
+		//resalta la zona donde se agrega la info	
+		resaltaZona(zonaNoticia,'#00BFFF');
+		//devuelve al color original a la zona resaltada	
+		setTimeout(function(){resaltaZona(zonaNoticia,'#FAFAFA');},300);	
+	}
+	
+	function resaltaZona(elemento,nuevo_color){
+		//cambia el color de fondo de un elemento(tag)
+		elemento.style.backgroundColor=nuevo_color;		
+	}
+	
+	function recibeServidor(){
+		//la noticia devuelta por el server
+		var noticia=this.req.responseText;
+		//el tiempo en que el servidor entrega la noticia en el cliente
+		var tiempo=mostrarHora();
+		
+		//arma la info(la noticia y el tiempo de la noticia)
+		var info="<strong>"+tiempo+"</strong> "+noticia;
+		//Va armando el catalogo de noticias del cliente, agregandole elementos
+		catalogo_noticias.push(info);
+		
+		//llama a la funcion que muestra en la pag.
+		muestraContenido(info);
+	}
+	 
+	function cargaContenidos() {
+	  var cargador = new net.CargadorContenidos("http://vacanwallpapers.byethost6.com/generaContenidos.php", recibeServidor);
+	}	
+
+	function detener_iniciar(){
+		if(this.value=="Iniciar"){
+			intervalo=setInterval(cargaContenidos,3000);			
+			this.value="Detener";
+			indice_noticia=null;
+		}else{
+			clearInterval(intervalo);
+			this.value="Iniciar";
+		}
+	}
+
+	function anterior_siguiente(){
+		//detenemos las peticiones al servidor
+		clearInterval(intervalo);
+		obtenerElementoId("detener").value="Iniciar";
+		//sacamos el tamaño del catalogo de noticias que tiene el cliente
+		var sizeCatalogo=catalogo_noticias.length-1;
+				
+		if(indice_noticia==null){
+			//al indice de noticias, le asignamos el tamaño del catalogo de noticias que tiene el cliente
+			indice_noticia=sizeCatalogo;
+		}
+		if(this.id=="siguiente"){
+			if(indice_noticia<sizeCatalogo){
+				//si el indice de noticias es menor que el tamaño del catalogo, significa que hay mas noticias siguientes
+				indice_noticia++;
+			}
+		}
+		if(this.id=="anterior"){
+			if(indice_noticia>0){
+			//si el indice de noticias es mayor que la posicion del primer elemento del catalogo(0), significa que hay mas noticias anteriores
+				indice_noticia--;
+			}
+		}
+		//sacamos la noticia del catalogo del cliente
+		var info=catalogo_noticias[indice_noticia];
+		//llama a la funcion que muestra en la pag.
+		muestraContenido(info);
+	}			
+ 
+	window.onload =function(){
+		//refresca cada 3 seg
+		intervalo=setInterval(cargaContenidos,3000);
+		//para el boton detener-iniciar
+		obtenerElementoId("detener").onclick=detener_iniciar;
+		//para el boton siguiente
+		obtenerElementoId("siguiente").onclick=anterior_siguiente;	
+		//para el boton anterior
+		obtenerElementoId("anterior").onclick=anterior_siguiente;
+	}
+</script>
+</head>
+<body>
+<div id="ticker"></div>
+
+<div id="acciones">
+  <input type="button" id="detener" value="Detener"/>
+  <input type="button" id="anterior" value="&laquo; Anterior" />
+  <input type="button" id="siguiente" value="Siguiente &raquo;" />
+</div>
+
+<div id="contenidos">
+<h1>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</h1>
+<p>Proin tristique condimentum sem. Fusce lorem sem, laoreet nec, laoreet et, venenatis nec, ligula.
+Nunc dictum sodales lorem. Fusce turpis. Nullam semper, ipsum ut ultrices mattis, nulla magna luctus 
+purus, sit amet vehicula magna magna vel velit.</p>
+
+<h2>Morbi a lacus. Proin pharetra nisi id est.</h2>
+
+<p>Maecenas mollis suscipit sapien. Pellentesque blandit dui eu mauris. Etiam elit urna, iaculis non,
+dignissim in, fermentum nec, ipsum. Nulla commodo aliquam lectus. Sed vulputate diam ac sapien accumsan
+consequat. Aliquam id urna sed dolor tincidunt tempor.</p>
+
+<h2>Quisque consequat. Nullam vel justo.</h2>
+
+<p>Cras sit amet elit a mauris ultricies viverra. Phasellus placerat quam et magna. Nunc sed tellus. 
+Pellentesque hendrerit pellentesque nunc. Aenean turpis. Sed justo tellus, mollis at, euismod at,  
+pellentesque eu, tellus. Nam vulputate. Nunc porttitor sapien tristique velit. Vestibulum tempus, 
+quam non dapibus pellentesque, sem nulla sagittis ligula, et volutpat turpis felis vitae nunc.</p>
+
+<p>Ut eros magna, congue in, sodales ac, facilisis ac, dolor. Aenean faucibus pellentesque est. Proin
+cursus. Vivamus mollis enim in magna. Donec urna risus, convallis eget, aliquet non, auctor sit amet, leo.
+Duis tellus purus, pharetra in, cursus sed, posuere semper, lorem. Fusce eget velit nec felis tempus
+gravida. Donec et augue vitae nulla posuere hendrerit. Nulla vehicula scelerisque massa. Phasellus eget
+lorem id quam molestie ultrices. Integer ac ligula sit amet lectus condimentum euismod. Sed malesuada 
+orci eu neque.</p>
+</div>
+</body>
+</html>
